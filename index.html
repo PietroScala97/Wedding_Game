@@ -1,13 +1,35 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Wedding Ultra Game</title>
-<style>
-body {margin:0; background:#111;}
-canvas {display:block; margin:auto; border:4px solid black;}
-</style>
+  <meta charset="UTF-8">
+  <title>Wedding Ultra Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <style>
+    body {margin:0; background:#111;}
+    canvas {display:block; margin:auto; border:4px solid black; width:100%; height:auto; max-width:1000px;}
+
+    /* PULSANTI TOUCH */
+    #touchControls {
+      position: fixed;
+      bottom: 20px;
+      width: 100%;
+      display: flex;
+      justify-content: space-around;
+      pointer-events: auto;
+      z-index: 1000;
+    }
+
+    #touchControls button {
+      font-size: 40px;
+      width: 80px;
+      height: 80px;
+      border-radius: 40px;
+      border: none;
+      background: rgba(255,255,255,0.3);
+      color: black;
+      touch-action: none; /* impedisce lo scroll su mobile */
+    }
+  </style>
 </head>
 <body>
 
