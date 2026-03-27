@@ -90,6 +90,25 @@ document.addEventListener("click", ()=>{
  if(gameState==="intro") startGame();
 },{once:true});
 
+  // ================= TOUCH CONTROLS =================
+const leftBtn = document.getElementById("leftBtn");
+const rightBtn = document.getElementById("rightBtn");
+const jumpBtn = document.getElementById("jumpBtn");
+
+let leftPressed = false;
+let rightPressed = false;
+let jumpPressed = false;
+
+// Premi e rilascia
+leftBtn.addEventListener("touchstart", e => { leftPressed = true; e.preventDefault(); });
+leftBtn.addEventListener("touchend",   e => { leftPressed = false; e.preventDefault(); });
+
+rightBtn.addEventListener("touchstart", e => { rightPressed = true; e.preventDefault(); });
+rightBtn.addEventListener("touchend",   e => { rightPressed = false; e.preventDefault(); });
+
+jumpBtn.addEventListener("touchstart", e => { jumpPressed = true; e.preventDefault(); });
+jumpBtn.addEventListener("touchend",   e => { jumpPressed = false; e.preventDefault(); });
+
 function startGame(){
  gameState="play";
 
@@ -166,16 +185,16 @@ if(showLogo){
 
  timer+=1/60;
 
- if(keys["ArrowRight"]) player.x+=player.speed;
- if(keys["ArrowLeft"]) player.x-=player.speed;
+ if(keys["ArrowRight"] || rightPressed) player.x += player.speed;
+if(keys["ArrowLeft"]  || leftPressed)  player.x += -player.speed;
 
- let maxJumps = jumpBoostTimer>0 ? 999 : 2;
+let maxJumps = jumpBoostTimer>0 ? 999 : 2;
 
- if(keys[" "] && player.jumps<maxJumps){
-  player.dy=-12;
+if((keys[" "] || jumpPressed) && player.jumps < maxJumps){
+  player.dy = -12;
   player.jumps++;
-  keys[" "]=false;
- }
+  jumpPressed = false; // impedisce il salto continuo
+}
 
  player.dy+=0.5;
  player.y+=player.dy;
