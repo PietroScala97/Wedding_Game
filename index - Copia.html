@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Wedding Ultra Game</title>
+<style>
+body {margin:0; background:#111;}
+canvas {display:block; margin:auto; border:4px solid black;}
+</style>
+</head>
+<body>
+
+<canvas id="game" width="1000" height="450"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let showLogo = true;        // Mostra logo all’inizio
+let logoTimer = 5;          // Durata in secondi
+let logoImage = new Image();
+logoImage.src = "gamelogo.png";
+
+let keys={}, player, levelIndex=0, gameState="intro";
+let timer=0, camX=0;
+
+let enemies=[], platforms=[], popups=[], powerups=[], obstacles=[];
+let goal=null;
+
+let speedBoostTimer=0, jumpBoostTimer=0;
+let hitFlash=0;
+
+let activeBoostUI = null;
+let activeBoostTimerUI = 0;
+
+// AUDIO
+let music = new Audio("music.mp3"); music.loop=true;
+let boostSound = new Audio("boost.wav");
+let levelSound = new Audio("levelup.wav");
+let goalSound = new Audio("goal.wav");
+
+// SFONDI
+let backgrounds = [new Image(),new Image(),new Image(),new Image()];
+backgrounds[0].src="bg1.png";
+backgrounds[1].src="bg2.png";
+backgrounds[2].src="bg3.png";
+backgrounds[3].src="bg4.png";
+
+// LIVELLI BILANCIATI
+const levels = [
+ {name:"💇 Parrucchiere", length:12000, goal:"💇‍♀️", enemy:"🚗", obstacle:"🚧"},
+ {name:"⛪ Chiesa", length:14000, goal:"⛪", enemy:"👵", obstacle:"🕊️"},
+ {name:"🎉 Sala", length:16000, goal:"🎉", enemy:"🕺", obstacle:"🍾"},
+ {name:"🎂 Torta", length:10000, goal:"🎂", enemy:"👶", obstacle:"🍰"}
+];
+
+document.addEventListener("keydown", e=>keys[e.key]=true);
+document.addEventListener("keyup", e=>keys[e.key]=false);
+
+document.addEventListener("click", ()=>{
+ music.play().catch(()=>{});
+ if(gameState==="intro") startGame();
+},{once:true});
+
+function startGame(){
+ gameState="play";
+
+ player={
+  x:50,y:330,w:60,h:70,
+  dy:0,jumps:0,speed:4,
+  sprite:new Image()
+ };
+ player.sprite.src="sprite1.png";
+
+ loadLevel();
+}
+
+function loadLevel(){
+ enemies=[]; platforms=[]; powerups=[]; obstacles=[];
+ let L = levels[levelIndex].length;
+
+ goal={x:L-200,y:330};
+
+ // PIATTAFORME MULTI ALTEZZA
+ for(let i=0;i<40;i++){
+  platforms.push({
+   x:300+i*400,
+   y:280 - Math.random()*180,
+   w:140,h:18
+  });
+ }
+
+ // PIÙ NEMICI
+ for(let i=0;i<35;i++){
+  enemies.push({
+   x:600+i*400,
+   y:330
+  });
+ }
+
+ // OSTACOLI DINAMICI
+ for(let i=0;i<25;i++){
+  obstacles.push({
+   x:500+i*500,
+   y:250+Math.random()*120,
+   dir:Math.random()>0.5?1:-1
+  });
+ }
+
+ // POWERUPS PIÙ VISIBILI
+ for(let i=0;i<15;i++){
+  powerups.push({
+   x:800+i*700,
+   y:260,
+   type:Math.random()>0.5?"speed":"jump"
+  });
+ }
+
+ levelSound.play();
+}
+
+function addPopup(t,x,y){
+ popups.push({t,x,y,life:60});
+}
+
+function update(){
+
+if(showLogo){
+  logoTimer -= 1/60; // decremento frame per frame
+  if(logoTimer <= 0){
+    showLogo = false;     // termina il logo
+    gameState = "intro";  // passa allo stato intro
+  }
+  return; // non aggiornare altro finché il logo è mostrato
+}
+
+ if(gameState!=="play") return;
+
+ timer+=1/60;
+
+ if(keys["ArrowRight"]) player.x+=player.speed;
+ if(keys["ArrowLeft"]) player.x-=player.speed;
+
+ let maxJumps = jumpBoostTimer>0 ? 999 : 2;
+
+ if(keys[" "] && player.jumps<maxJumps){
+  player.dy=-12;
+  player.jumps++;
+  keys[" "]=false;
+ }
+
+ player.dy+=0.5;
+ player.y+=player.dy;
+
+ if(player.y>=330){
+  player.y=330;
+  player.jumps=0;
+ }
+
+if(activeBoostTimerUI > 0){
+ activeBoostTimerUI -= 1/60;
+} else {
+ activeBoostUI = null;
+}
+
+ // piattaforme
+ platforms.forEach(p=>{
+  if(player.x+player.w>p.x && player.x<p.x+p.w &&
+     player.y+player.h>=p.y && player.y+player.h<=p.y+15){
+    player.y=p.y-player.h;
+    player.dy=0;
+    player.jumps=0;
+  }
+ });
+
+ // nemici
+ enemies.forEach(e=>{
+  e.x += Math.sign(player.x-e.x)*1.5;
+
+  if(collide(player,e)){
+    timer+=2;
+    hitFlash=10;
+    addPopup("+2",e.x,e.y);
+  }
+ });
+
+ // ostacoli
+ obstacles.forEach(o=>{
+  o.x += o.dir*2;
+
+  if(collide(player,o)){
+    timer+=3;
+    hitFlash=10;
+  }
+ });
+
+ // POWERUPS VISIVI + ANIMATI
+ powerups.forEach((p,i)=>{
+  let float = Math.sin(Date.now()/200 + i)*5;
+
+  if(collide(player,p)){
+ if(p.type==="speed"){
+   speedBoostTimer=3;
+   activeBoostUI = "⚡ Velocità x2";
+ }
+
+ if(p.type==="jump"){
+   jumpBoostTimer=3;
+   activeBoostUI = "🔵 Triplo salto";
+ }
+
+ activeBoostTimerUI = 3;
+
+ boostSound.play();
+ p.x=-1000;
+}
+
+  p.float = float;
+ });
+
+ // timer boost
+ if(speedBoostTimer>0){speedBoostTimer-=1/60; player.speed=7;}
+ else player.speed=4;
+
+ if(jumpBoostTimer>0) jumpBoostTimer-=1/60;
+
+ // goal
+if(player.x > levels[levelIndex].length) {
+  goalSound.play();
+
+  if(levelIndex === levels.length - 1) {
+    // Ultimo livello completato → fine gioco
+    gameState = "end";  // subito END
+  } else {
+    // livelli intermedi → transizione
+    gameState = "transition";
+
+    setTimeout(()=>{
+      levelIndex++;
+      player.x = 50;
+      loadLevel();
+      gameState = "play";
+    }, 1500);
+  }
+}
+
+ // popup
+ popups.forEach(p=>{p.y-=1;p.life--});
+ popups=popups.filter(p=>p.life>0);
+
+ camX=Math.max(0,player.x-200);
+}
+
+function draw(){
+
+// Mostra logo iniziale per 5 secondi
+if(showLogo){
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0,0,1000,450);
+
+  // Disegna l'immagine al centro e leggermente ridimensionata
+  ctx.drawImage(logoImage, 250, 50, 500, 350);
+
+  return; // esci da draw finché il logo è mostrato
+}
+
+// INTRO SCREEN
+if(gameState==="intro"){
+ ctx.fillStyle="#000";
+ ctx.fillRect(0,0,1000,450);
+
+ // titolo
+ ctx.fillStyle="white";
+ ctx.font="50px Arial";
+ ctx.fillText("💍 Piero & Verdiana 💍",180,90);
+
+ ctx.font="30px Arial";
+ ctx.fillText("Wedding Ultra Game",300,140);
+
+ // storia
+ ctx.font="18px Arial";
+ ctx.fillText("Aiuta Piero a raggiungere Verdiana attraversando",180,190);
+ ctx.fillText("tutte le fasi del matrimonio!",260,215);
+
+ // regole
+ ctx.font="20px Arial";
+ ctx.fillText("🎮 COME GIOCARE:",50,260);
+ ctx.font="16px Arial";
+ ctx.fillText("→ Frecce: muoviti",50,285);
+ ctx.fillText("→ Spazio: salta (doppio salto con boost)",50,305);
+
+ // powerups
+ ctx.font="20px Arial";
+ ctx.fillText("⚡ POTENZIAMENTI:",350,260);
+ ctx.font="16px Arial";
+ ctx.fillText("⚡ Velocità: corri più veloce (3 sec)",350,285);
+ ctx.fillText("🔵 Super salto: salti infiniti (3 sec)",350,305);
+
+ // livelli
+ ctx.font="20px Arial";
+ ctx.fillText("🌍 LIVELLI:",700,260);
+ ctx.font="16px Arial";
+ ctx.fillText("💇 Parrucchiere",700,285);
+ ctx.fillText("⛪ Chiesa",700,305);
+ ctx.fillText("🎉 Festa",700,325);
+ ctx.fillText("🎂 Torta finale!",700,345);
+
+// BOOST UI IN ALTO A DESTRA
+if(activeBoostUI){
+ ctx.fillStyle="rgba(0,0,0,0.6)";
+ ctx.fillRect(650,10,330,40);
+
+ ctx.fillStyle="yellow";
+ ctx.font="20px Arial";
+ ctx.fillText(activeBoostUI,660,35);
+}
+
+ // CTA lampeggiante
+ let blink = Math.sin(Date.now()/300) > 0;
+
+ if(blink){
+  ctx.font="30px Arial";
+  ctx.fillStyle="yellow";
+  ctx.fillText("👉 CLICCA PER INIZIARE 👈",280,400);
+ }
+
+ return;
+}
+ ctx.clearRect(0,0,1000,450);
+
+ // BACKGROUND
+ let bg = backgrounds[levelIndex];
+ for(let i=0;i<10;i++){
+  ctx.drawImage(bg,i*1000-camX*0.3,0,1000,450);
+ }
+
+ ctx.save();
+ ctx.translate(-camX,0);
+
+ // piattaforme
+ ctx.fillStyle="orange";
+ platforms.forEach(p=>ctx.fillRect(p.x,p.y,p.w,p.h));
+
+ // HIT FLASH
+ if(hitFlash>0){
+  ctx.globalAlpha=0.4;
+  hitFlash--;
+ }
+
+ ctx.drawImage(player.sprite,player.x,player.y,player.w,player.h);
+ ctx.globalAlpha=1;
+
+ // NEMICI GRANDI
+ ctx.font="35px Arial";
+ enemies.forEach(e=>ctx.fillText(levels[levelIndex].enemy,e.x,e.y));
+
+ // OSTACOLI
+ctx.font="45px Arial"; // più grandi
+obstacles.forEach(o=>{
+ ctx.fillText(levels[levelIndex].obstacle,o.x,o.y);
+});
+
+ // POWERUPS GRANDI E COLORATI
+ powerups.forEach(p=>{
+  ctx.font="40px Arial";
+
+  if(p.type==="speed"){
+    ctx.fillStyle="yellow";
+    ctx.fillText("⚡",p.x,p.y+p.float);
+  } else {
+    ctx.fillStyle="cyan";
+    ctx.fillText("🔵",p.x,p.y+p.float);
+  }
+ });
+
+ // goal
+ ctx.font="45px Arial";
+ ctx.fillText(levels[levelIndex].goal,goal.x,goal.y);
+
+ ctx.restore();
+
+ // HUD
+ ctx.fillStyle="white";
+ ctx.font="22px Arial";
+ ctx.fillText("Tempo: "+timer.toFixed(1),20,30);
+
+// BOOST UI IN ALTO A DESTRA
+if(activeBoostUI){
+ ctx.fillStyle="rgba(0,0,0,0.6)";
+ ctx.fillRect(650,10,330,40);
+
+ ctx.fillStyle="yellow";
+ ctx.font="20px Arial";
+ ctx.fillText(activeBoostUI,660,35);
+}
+
+ // popup
+ ctx.fillStyle="red";
+ popups.forEach(p=>ctx.fillText(p.t,p.x-camX,p.y));
+
+ // TRANSITION
+ if(gameState==="transition"){
+  ctx.fillStyle="rgba(0,0,0,0.7)";
+  ctx.fillRect(0,0,1000,450);
+
+  ctx.fillStyle="white";
+  ctx.font="40px Arial";
+  ctx.fillText("NUOVA LOCATION!",250,200);
+
+  for(let i=0;i<30;i++){
+    ctx.fillText("✨",Math.random()*1000,Math.random()*450);
+  }
+ }
+
+ // END (FIX COMPLETO)
+if(gameState==="end"){
+ ctx.fillStyle="rgba(0,0,0,0.9)";
+ ctx.fillRect(0,0,1000,450);
+
+ ctx.fillStyle="white";
+
+ // titolo
+ ctx.font="42px Arial";
+ ctx.fillText("💍 MATRIMONIO COMPLETATO!",130,170);
+
+ // tempo grande e centrato
+ ctx.font="36px Arial";
+ ctx.fillStyle="yellow";
+ ctx.fillText("⏱ Tempo finale: "+timer.toFixed(1)+" sec",250,240);
+
+ // messaggio
+ ctx.font="26px Arial";
+ ctx.fillStyle="white";
+ ctx.fillText("Grazie per aver giocato!",300,300);
+
+ // fuochi
+ for(let i=0;i<60;i++){
+  ctx.fillText("🎆",Math.random()*1000,Math.random()*450);
+ }
+}
+}
+
+function loop(){
+ requestAnimationFrame(loop);
+ update();
+ draw();
+}
+
+function collide(a,b){
+ return a.x < b.x+40 &&
+        a.x+a.w > b.x &&
+        a.y < b.y+40 &&
+        a.y+a.h > b.y;
+}
+
+loop();
+</script>
+
+</body>
+</html>
